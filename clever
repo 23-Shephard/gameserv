@@ -1,0 +1,68 @@
+{
+	$fail = 0;
+	while !?is_finished() do {
+		print "turn", ?turn();
+		print "failure_index", $fail;
+		$i = 1;
+		if ?result_prod_sold(?my_id()) == 0 |
+			?result_material_bought(?my_id()) == 0 &
+				?material(?my_id()) == 0 then
+		{
+			$fail = $fail + 1;
+		} else {
+			$fail = 0;
+		}
+		$sum_prod = 0;
+		$sum_raw = 0;
+		$to_sell_price = ?production_price();
+		$to_buy_price = ?material_price();
+		$sold_yesterday = 0;
+		$sold_min_price = 10000;
+		while $i<=?players() do {
+			$sell_price[$i] = ?result_prod_price($i);
+			if $sell_price[$i]>0 &
+				$sell_price[$i]<$sold_min_price then
+			{
+				$sold_min_price = $sell_price[$i]; 
+			}
+			$buy_price[$i] = ?result_material_price($i);
+			$material[$i] = ?material($i);
+			$sum_raw = $sum_raw + $material[$i];
+			$product[$i] = ?production($i);
+			$sum_prod = $sum_prod + $product[$i];
+			$sold_yesterday =
+				$sold_yesterday + ?result_prod_sold($i);
+			$i = $i + 1;
+		}
+		if $sum_prod > ?demand() then {
+			if $sold_yesterday == ?demand() then
+				$to_sell_price = $sold_min_price-1;
+			else
+				$to_sell_price = $to_sell_price - 1;
+			$to_sell_price = $to_sell_price - $fail*10;
+		}
+		sell ?production(?my_id()), $to_sell_price;
+		$to_prod = 0;
+		while $to_prod*(2300+?material_price())<?money(?my_id()) &
+			$to_prod<?factories(?my_id()) do
+		{
+			$to_prod = $to_prod + 1;
+		}
+		if $to_prod > ?material(?my_id()) then
+			$to_prod = ?material(?my_id());
+		prod $to_prod;
+		$to_buy = ?factories(?my_id())-?material(?my_id())+$to_prod;
+		if $to_buy*?active_players() > ?supply() then
+			$to_buy_price = $to_buy_price + 1;
+		$to_buy_price = $to_buy_price + 5*$fail;
+		if $to_buy > 0 then
+			buy $to_buy, ?material_price();
+		if ?money(?my_id()) >= 20000 then
+			build;
+		turn;
+	}
+}
+
+		
+
+

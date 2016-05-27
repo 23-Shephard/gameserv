@@ -1,0 +1,12 @@
+{
+	while !?is_finished() do {
+		print "turn number", ?turn();
+		$to_prod = 2;
+		if $to_prod > ?material(?my_id()) then
+			$to_prod = ?material(?my_id());
+		prod $to_prod;
+		sell ?production(?my_id()), ?production_price();
+		buy 2, ?material_price();
+		turn;
+	}
+}

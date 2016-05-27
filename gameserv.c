@@ -184,6 +184,7 @@ void pl_init_all(struct player *p)
 		p[i].products = 2;
 		p[i].factories = 2;
 		p[i].building = NULL;
+		memset(p[i].buf, 0, BUF_SIZE);
 	}
 }
 
@@ -360,16 +361,17 @@ struct auc *accept_request(struct auc *queue, struct request *r,
 		free(r);
 		return queue;
 	}
-	print_msg(r->pl, "Accepted.\n");
 	if (queue == NULL) {
+		print_msg(r->pl, "Accepted.\n");
 		queue = malloc(sizeof(struct auc));
 		queue->req = r;
 		queue->next = NULL;
 	} else if (mode == sell && r->price > queue->req->price )
-		queue = accept_request(queue->next, r, sell, st);
+		queue->next = accept_request(queue->next, r, sell, st);
 	else if (mode == buy && r->price < queue->req->price )
-		queue = accept_request(queue->next, r, buy, st);
+		queue->next = accept_request(queue->next, r, buy, st);
 	else {
+		print_msg(r->pl, "Accepted.\n");
 		struct auc *tmp = malloc(sizeof(struct auc));
 		tmp->next = queue;
 		tmp->req = r;
@@ -387,11 +389,15 @@ void change_level(struct market_status *old)
 		{ 1, 1, 3, 4, 3 },
 		{ 1, 1, 2, 4, 4 },
 	};
-	int r = 1 + (int)(12.0*rand()/(RAND_MAX+1.0));
-	int i, sum;
-	for (i=0,sum=0; sum<r; i++)
-		sum += level_change[old->level-1][i];
-	(month>1) ? (old->level = i-1) : (old->level = 3);
+	if (month == 1)
+		old->level = 3;
+	else {
+		int r = 1 + (int)(12.0*rand()/(RAND_MAX+1.0));
+		int i, sum;
+		for (i=0,sum=0; sum<r; i++)
+			sum += level_change[old->level-1][i];
+		old->level = i;
+	}
 	switch (old->level) {
 	case 1:
 		old->sell_n = pl_count;
@@ -467,22 +473,19 @@ void satisfy_sell(struct request *req, int ammount, char *auc_res)
 struct auc *auc_chance(struct auc *queue, int possible_deals,
 	int participants, sat_ptr satisfy, char *auc_res)
 {
-	int r = (int)((float)(participants)*rand()/(RAND_MAX+1.0));
-	struct auc *tmp = queue;
+	int r = 1 + (int)((float)(participants)*rand()/(RAND_MAX+1.0));
+	struct auc **tmp = &queue;
 	int i;
-	for (i=0; i<r; i++)
-		tmp = tmp->next;
-	if (tmp->req->count <= possible_deals) {
-		(*satisfy)(tmp->req, tmp->req->count, auc_res);
-		possible_deals -= tmp->req->count;
+	for (i=0; i<r-1; i++)
+		tmp = &(*tmp)->next;
+	if ((*tmp)->req->count <= possible_deals) {
+		(*satisfy)((*tmp)->req, (*tmp)->req->count, auc_res);
+		possible_deals -= (*tmp)->req->count;
 	} else {
-		(*satisfy)(tmp->req, possible_deals, auc_res);
+		(*satisfy)((*tmp)->req, possible_deals, auc_res);
 		possible_deals = 0;
 	}
-	if (r == 0) /*the begining of the queue*/
-		queue = delete_request(queue);
-	else
-		tmp = delete_request(tmp);
+	(*tmp) = delete_request(*tmp);
 	if (possible_deals > 0) {
 		return auc_chance(queue, possible_deals, participants-1,
 			satisfy, auc_res);
@@ -525,7 +528,7 @@ struct auc *auction(struct auc *queue, int possible_deals,
 		}
 		return auction(queue, possible_deals, satisfy, auc_res);
 	} else {
-		return auc_chance(queue, prod_n, participants,
+		return auc_chance(queue, possible_deals, participants,
 			satisfy, auc_res);
 	}
 }
@@ -584,7 +587,7 @@ void request_for_bank(struct player *p, int k, char **cmd)
 			free(r);
 		}
 	} else {
-		if (p[k].money >= r->price) {
+		if (p[k].money >= r->count * r->price) {
 			p[k].money -= r->price * r->count;
 			bank(buy, p, k, r);
 		} else {
@@ -721,6 +724,8 @@ void congratulate_winner(struct player *p)
 	for (i=0; i<pl_n; i++) {
 		if (p[i].status == play || p[i].status == end_turn) {
 			char str[50];
+			sprintf(str, "You are winner!\n");
+			print_msg(&p[i], str);
 			sprintf(str, "Player %d has won the game."
 				" Congratulations!\n", i+1);
 			notify_all(p, str);
